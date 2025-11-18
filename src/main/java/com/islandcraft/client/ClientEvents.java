@@ -15,6 +15,9 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.CameraType;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.network.chat.Component;
+import org.lwjgl.glfw.GLFW;
+import net.minecraftforge.client.event.InputEvent;
 import java.util.Map;
 import java.util.WeakHashMap;
 import java.util.List;
@@ -37,6 +40,8 @@ import net.minecraftforge.fml.common.Mod;
 
 import com.islandcraft.IslandCraftMod;
 import com.islandcraft.client.ClientConfig;
+import com.islandcraft.network.NetworkHandler;
+import com.islandcraft.network.ExplosionPacket;
 
 @Mod.EventBusSubscriber(modid = IslandCraftMod.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
 public class ClientEvents {
@@ -66,6 +71,13 @@ public class ClientEvents {
 
     // Last block position to detect coarse movement across tile boundaries
     private static BlockPos lastCachedBlockPos = null;
+
+    // Adjustable max range for traces and click detection (in blocks)
+    private static final double MAX_RANGE = 200.0D;
+
+    // Click debounce to avoid duplicate messages (200 ms)
+    private static final long CLICK_DEBOUNCE_NS = 200_000_000L;
+    private static long lastClickNanos = 0L;
 
     // Telemetry: traces attempted and successful hits per second / per minute
     private static long telemetryLastSecond = System.nanoTime() / 1_000_000_000L;
@@ -214,7 +226,7 @@ public class ClientEvents {
 
         // Perform the world trace and update the cached result
         try {
-            double maxRange = 100.0D;
+            double maxRange = MAX_RANGE;
             Vec3 traceEnd = eye.add(look.scale(maxRange));
             // Telemetry: note we're attempting a trace (and time it)
             long traceStart = System.nanoTime();
@@ -252,6 +264,164 @@ public class ClientEvents {
             }
         } catch (Throwable t) {
             // swallow — tracing is best-effort
+        }
+    }
+
+    @SubscribeEvent
+    public static void onMouseInput(InputEvent event) {
+        // Only handle mouse input events; use reflection to avoid mapping issues
+        int action = -1;
+        int button = -1;
+        try {
+            String clsName = event.getClass().getSimpleName();
+            IslandCraftMod.LOGGER.info("Mouse event received: {}", clsName);
+            // Try to reflectively read action/button; if methods not present, bail out
+            java.lang.reflect.Method mAction = null;
+            java.lang.reflect.Method mButton = null;
+            try {
+                mAction = event.getClass().getMethod("getAction");
+            } catch (NoSuchMethodException ignored) {
+            }
+            try {
+                mButton = event.getClass().getMethod("getButton");
+            } catch (NoSuchMethodException ignored) {
+            }
+            if (mAction == null || mButton == null) {
+                IslandCraftMod.LOGGER.info("Mouse event missing getAction/getButton methods; skipping");
+                return;
+            }
+            Object a = mAction.invoke(event);
+            Object b = mButton.invoke(event);
+            if (a instanceof Number)
+                action = ((Number) a).intValue();
+            if (b instanceof Number)
+                button = ((Number) b).intValue();
+            IslandCraftMod.LOGGER.info("Mouse event action={} button={}", action, button);
+            if (action != GLFW.GLFW_PRESS || button != GLFW.GLFW_MOUSE_BUTTON_LEFT)
+                return;
+        } catch (Throwable t) {
+            IslandCraftMod.LOGGER.info("Failed to inspect mouse event: {}", t.toString());
+            return;
+        }
+
+        Minecraft mc = Minecraft.getInstance();
+        LocalPlayer player = mc.player;
+        if (player == null)
+            return;
+
+        // Only proceed if the player is fully scoped with a spyglass
+        try {
+            if (!player.isUsingItem() || !player.getUseItem().is(Items.SPYGLASS))
+                return;
+            boolean scoped = false;
+            try {
+                Object res = GameRenderer.class.getMethod("isScoping").invoke(mc.gameRenderer);
+                if (res instanceof Boolean)
+                    scoped = (Boolean) res;
+            } catch (NoSuchMethodException nsme) {
+                // mapping may not expose isScoping; fall back to ticks
+            }
+            if (!scoped && player.getTicksUsingItem() < 6)
+                return;
+        } catch (Throwable ignored) {
+            return;
+        }
+
+        Vec3 hitLoc = cachedHitLocation;
+        BlockPos pos = cachedHit == null ? null : cachedHit.getBlockPos();
+        Vec3 camPos = null;
+
+        if (hitLoc == null || pos == null) {
+            // perform a best-effort quick trace from the active camera
+            try {
+                Camera camera = mc.gameRenderer.getMainCamera();
+                camPos = camera.getPosition();
+                Vec3 eye = camPos;
+                Object lookObj = camera.getLookVector();
+                Vec3 look;
+                if (lookObj instanceof Vec3) {
+                    look = (Vec3) lookObj;
+                } else {
+                    try {
+                        Class<?> cls = lookObj.getClass();
+                        double lx = ((Number) cls.getMethod("x").invoke(lookObj)).doubleValue();
+                        double ly = ((Number) cls.getMethod("y").invoke(lookObj)).doubleValue();
+                        double lz = ((Number) cls.getMethod("z").invoke(lookObj)).doubleValue();
+                        look = new Vec3(lx, ly, lz);
+                    } catch (Throwable t) {
+                        look = player.getLookAngle();
+                    }
+                }
+
+                Vec3 end = eye.add(look.scale(MAX_RANGE));
+                HitResult raw = null;
+                try {
+                    raw = mc.level.clip(new ClipContext(eye, end, ClipContext.Block.OUTLINE, ClipContext.Fluid.ANY, player));
+                } catch (Throwable t) {
+                    raw = mc.hitResult;
+                }
+                if (raw instanceof BlockHitResult) {
+                    BlockHitResult bhr = (BlockHitResult) raw;
+                    hitLoc = bhr.getLocation();
+                    pos = bhr.getBlockPos();
+                }
+            } catch (Throwable ignored) {
+            }
+        } else {
+            try {
+                camPos = mc.gameRenderer.getMainCamera().getPosition();
+            } catch (Throwable ignored) {
+            }
+        }
+
+        // If we have a hit and a camera position, ensure the hit is within range
+        if (hitLoc == null || pos == null || camPos == null) {
+            try {
+                player.displayClientMessage(Component.literal("(no hit)"), false);
+            } catch (Throwable t) {
+                try {
+                    mc.gui.getChat().addMessage(Component.literal("(no hit)"));
+                } catch (Throwable ignored) {
+                }
+            }
+            return;
+        }
+        double dist = camPos.distanceTo(hitLoc);
+        if (dist > MAX_RANGE) {
+            IslandCraftMod.LOGGER.trace("Click hit beyond max range ({} > {}), ignoring", dist, MAX_RANGE);
+            return;
+        }
+        String msg = String.format("(%d, %d, %d | %.2f)", pos.getX(), pos.getY(), pos.getZ(), dist);
+        // Debounce duplicate clicks
+        long nowNs = System.nanoTime();
+        if (nowNs - lastClickNanos < CLICK_DEBOUNCE_NS) {
+            IslandCraftMod.LOGGER.trace("Click ignored by debounce ({} ns since last)", nowNs - lastClickNanos);
+            return;
+        }
+        lastClickNanos = nowNs;
+
+        // Send a request to create a server-side explosion at the block position.
+        try {
+            float strength = 4.0f; // TNT-like default; adjust as desired
+            boolean fire = false;
+            int modeOrd = 0; // unused for TNT fallback
+            IslandCraftMod.LOGGER.info("Requesting explosion at {} strength={}", pos, strength);
+            if (NetworkHandler.CHANNEL != null) {
+                NetworkHandler.CHANNEL.sendToServer(new ExplosionPacket(pos, strength, fire, modeOrd));
+            } else {
+                IslandCraftMod.LOGGER.warn("Network channel not available; fallback to client-side chat only");
+            }
+            // Provide immediate client feedback as well
+            try {
+                player.displayClientMessage(Component.literal(msg), false);
+            } catch (Throwable t) {
+                try {
+                    mc.gui.getChat().addMessage(Component.literal(msg));
+                } catch (Throwable ignored) {
+                }
+            }
+        } catch (Throwable t) {
+            IslandCraftMod.LOGGER.warn("Failed to request explosion: {}", t.toString());
         }
     }
 
@@ -314,7 +484,7 @@ public class ClientEvents {
         }
         BlockHitResult bhr = cachedHit;
         Vec3 hitLoc = cachedHitLocation;
-        double maxRange = 100.0D;
+        double maxRange = MAX_RANGE;
         // Use camera position for distance checks so rendering aligns with camera-based
         // traces
         Camera camera = mc.gameRenderer.getMainCamera();
@@ -397,8 +567,8 @@ public class ClientEvents {
         // Do not manually translate the PoseStack by camera position — we compute
         // camera-relative coordinates for vertices instead.
         double dist = hitDist;
-        if (dist > 100.0) {
-            IslandCraftMod.LOGGER.trace("Hit too far: {} > 100", dist);
+        if (dist > maxRange) {
+            IslandCraftMod.LOGGER.trace("Hit too far: {} > {} -- skipping", dist, maxRange);
             return;
         }
 
