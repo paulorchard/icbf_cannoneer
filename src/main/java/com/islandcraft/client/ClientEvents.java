@@ -13,6 +13,7 @@ import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.client.CameraType;
 import net.minecraft.world.level.block.state.BlockState;
 import java.util.Map;
 import java.util.WeakHashMap;
@@ -35,6 +36,7 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
 import com.islandcraft.IslandCraftMod;
+import com.islandcraft.client.ClientConfig;
 
 @Mod.EventBusSubscriber(modid = IslandCraftMod.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
 public class ClientEvents {
@@ -84,6 +86,15 @@ public class ClientEvents {
         LocalPlayer player = mc.player;
         if (player == null)
             return;
+
+        // Respect client config: if camera is in third-person and user disabled
+        // overlay, skip tracing
+        try {
+            CameraType camType = mc.options.getCameraType();
+            if (camType != CameraType.FIRST_PERSON && !ClientConfig.SHOW_IN_THIRD_PERSON.get())
+                return;
+        } catch (Throwable ignored) {
+        }
 
         // Only consider tracing while the player is using a spyglass and scoped
         if (!player.isUsingItem() || !player.getUseItem().is(Items.SPYGLASS))
@@ -145,8 +156,26 @@ public class ClientEvents {
         boolean onInterval = (tickCounter % traceIntervalTicks) == 0;
 
         // Movement/rotation gating (quantized)
-        Vec3 eye = player.getEyePosition(1.0F);
-        Vec3 look = player.getLookAngle();
+        // Use the active camera position/look so third-person camera mods (e.g.
+        // AutoThirdPerson)
+        // produce traces that match what the player actually sees.
+        Camera camera = mc.gameRenderer.getMainCamera();
+        Vec3 eye = camera.getPosition();
+        Object lookObj = camera.getLookVector();
+        Vec3 look;
+        if (lookObj instanceof Vec3) {
+            look = (Vec3) lookObj;
+        } else {
+            try {
+                Class<?> cls = lookObj.getClass();
+                double lx = ((Number) cls.getMethod("x").invoke(lookObj)).doubleValue();
+                double ly = ((Number) cls.getMethod("y").invoke(lookObj)).doubleValue();
+                double lz = ((Number) cls.getMethod("z").invoke(lookObj)).doubleValue();
+                look = new Vec3(lx, ly, lz);
+            } catch (Throwable t) {
+                look = player.getLookAngle();
+            }
+        }
         boolean moved = false;
         if (lastCachedBlockPos == null || !lastCachedBlockPos.equals(player.blockPosition())) {
             moved = true;
@@ -234,6 +263,14 @@ public class ClientEvents {
         if (player == null)
             return;
 
+        // Respect client config: optionally hide overlay in third-person camera modes
+        try {
+            CameraType camType = mc.options.getCameraType();
+            if (camType != CameraType.FIRST_PERSON && !ClientConfig.SHOW_IN_THIRD_PERSON.get())
+                return;
+        } catch (Throwable ignored) {
+        }
+
         // Only when player is using the spyglass and is scoped (zoomed in)
         if (!player.isUsingItem())
             return;
@@ -278,16 +315,31 @@ public class ClientEvents {
         BlockHitResult bhr = cachedHit;
         Vec3 hitLoc = cachedHitLocation;
         double maxRange = 100.0D;
-        Vec3 playerEye = player.getEyePosition(1.0F);
-        Vec3 look = player.getLookAngle();
+        // Use camera position for distance checks so rendering aligns with camera-based
+        // traces
+        Camera camera = mc.gameRenderer.getMainCamera();
+        Vec3 camPos = camera.getPosition();
+        Object lookObj = camera.getLookVector();
+        Vec3 look;
+        if (lookObj instanceof Vec3) {
+            look = (Vec3) lookObj;
+        } else {
+            try {
+                Class<?> cls = lookObj.getClass();
+                double lx = ((Number) cls.getMethod("x").invoke(lookObj)).doubleValue();
+                double ly = ((Number) cls.getMethod("y").invoke(lookObj)).doubleValue();
+                double lz = ((Number) cls.getMethod("z").invoke(lookObj)).doubleValue();
+                look = new Vec3(lx, ly, lz);
+            } catch (Throwable t) {
+                look = player.getLookAngle();
+            }
+        }
 
         BlockPos pos = bhr.getBlockPos();
         Direction face = bhr.getDirection();
 
-        // Distance check (max 100 blocks) measured from the player's eye
-        // position (trace origin). Using the camera position can be offset and
-        // produced incorrect >=6.0 caps previously.
-        double hitDist = playerEye.distanceTo(hitLoc);
+        // Distance check (max 100 blocks) measured from the camera position
+        double hitDist = camPos.distanceTo(hitLoc);
         IslandCraftMod.LOGGER.trace("Not scoped yet: scoped={} ticksUsing={}", scoped, player.getTicksUsingItem());
         if (hitDist > maxRange) {
             IslandCraftMod.LOGGER.trace("Trace hit beyond maxRange: {} > {} -- skipping", hitDist, maxRange);
@@ -331,8 +383,8 @@ public class ClientEvents {
         // Detailed debug: log trace/ hit coordinates and distance
         try {
             IslandCraftMod.LOGGER.trace(
-                    "Spyglass scoped hit at {} face {} playerEye={} hitLoc={} blockCenter={} hitDist={}", pos, face,
-                    playerEye, hitLoc, new Vec3(pos.getX() + 0.5D, pos.getY() + 0.5D, pos.getZ() + 0.5D), hitDist);
+                    "Spyglass scoped hit at {} face {} camPos={} hitLoc={} blockCenter={} hitDist={}", pos, face,
+                    camPos, hitLoc, new Vec3(pos.getX() + 0.5D, pos.getY() + 0.5D, pos.getZ() + 0.5D), hitDist);
         } catch (Exception ignore) {
             IslandCraftMod.LOGGER.trace("Spyglass scoped hit at {} face {} hitDist {}", pos, face, hitDist);
         }
@@ -344,8 +396,6 @@ public class ClientEvents {
 
         // Do not manually translate the PoseStack by camera position — we compute
         // camera-relative coordinates for vertices instead.
-        Camera camera = mc.gameRenderer.getMainCamera();
-        Vec3 camPos = camera.getPosition();
         double dist = hitDist;
         if (dist > 100.0) {
             IslandCraftMod.LOGGER.trace("Hit too far: {} > 100", dist);
@@ -434,15 +484,6 @@ public class ClientEvents {
         }
 
         try {
-            Object poseEntry = ps.last();
-            Object mat = null;
-            try {
-                mat = poseEntry.getClass().getMethod("pose").invoke(poseEntry);
-            } catch (NoSuchMethodException nsme) {
-                // try alternate method name
-                mat = poseEntry.getClass().getMethod("pose", (Class<?>[]) null).invoke(poseEntry);
-            }
-
             BufferBuilder buf = Tesselator.getInstance().getBuilder();
             // Ensure we use the position-color shader for untextured colored geometry
             try {
@@ -451,22 +492,16 @@ public class ClientEvents {
             }
             buf.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
 
-            // Use the VertexConsumer API directly (typesafe) to avoid reflection issues
+            // Use the VertexConsumer API directly (typesafe)
             try {
                 VertexConsumer vc = buf;
 
-                // Render the center block and its 4 cardinal neighbors (a plus-shaped cross).
-                // Orientation depends on the hit face:
-                // - UP/DOWN: cross in XZ plane (neighbors east/west/north/south)
-                // - NORTH/SOUTH: cross in XY plane (neighbors east/west/up/down)
-                // - EAST/WEST: cross in ZY plane (neighbors north/south/up/down)
                 int[][] offsets3;
                 if (face == Direction.UP || face == Direction.DOWN) {
                     offsets3 = new int[][] { { 0, 0, 0 }, { 1, 0, 0 }, { -1, 0, 0 }, { 0, 0, 1 }, { 0, 0, -1 } };
                 } else if (face == Direction.NORTH || face == Direction.SOUTH) {
                     offsets3 = new int[][] { { 0, 0, 0 }, { 1, 0, 0 }, { -1, 0, 0 }, { 0, 1, 0 }, { 0, -1, 0 } };
                 } else {
-                    // EAST or WEST
                     offsets3 = new int[][] { { 0, 0, 0 }, { 0, 0, 1 }, { 0, 0, -1 }, { 0, 1, 0 }, { 0, -1, 0 } };
                 }
 
@@ -476,7 +511,6 @@ public class ClientEvents {
                     int dz = off[2];
                     BlockPos targetPos = pos.offset(dx, dy, dz);
 
-                    // Skip if target is air
                     try {
                         if (mc.level.getBlockState(targetPos).isAir())
                             continue;
@@ -624,13 +658,13 @@ public class ClientEvents {
                     }
                 }
             } catch (Exception ex) {
-                IslandCraftMod.LOGGER.trace("Fallback (reflection) - failed to use VertexConsumer: {}", ex.toString());
+                IslandCraftMod.LOGGER.trace("Fallback - failed to use VertexConsumer: {}", ex.toString());
             }
 
             Tesselator.getInstance().end();
         } catch (Exception ex) {
-            // If reflection approach fails, log and skip rendering this frame
-            IslandCraftMod.LOGGER.warn("Failed to render spyglass highlight (reflection):", ex);
+            // If rendering fails, log at trace and skip rendering this frame
+            IslandCraftMod.LOGGER.trace("Failed to render spyglass highlight (render): {}", ex.toString());
         }
 
         RenderSystem.depthMask(true);
