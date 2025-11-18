@@ -1,0 +1,28 @@
+modLoader="javafml"
+loaderVersion=">=46.0"
+license="MIT"
+
+[[mods]]
+modId="icbf_cannoneer"
+version="1.0.0"
+displayName="ICBF Cannoneer"
+description='"ICBF Cannoneer - Spyglass face highlight (development)"'
+
+# Dependencies
+[[dependencies.icbf_cannoneer]]
+    modId="forge"
+    mandatory=true
+    versionRange="${forge_version_range}"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.icbf_cannoneer]]
+    modId="minecraft"
+    mandatory=true
+    versionRange="${minecraft_version_range}"
+    ordering="NONE"
+    side="BOTH"
+
+# Features (optional)
+# [features.icbf_cannoneer]
+# openGLVersion = "[3.2,)"

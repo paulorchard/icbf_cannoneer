@@ -1,0 +1,12 @@
+{
+    "java.configuration.checkProjectSettingsExclusions": false,
+    "java.home": "",
+    "java.import.gradle.enabled": true,
+    "java.configuration.runtimes": [],
+    "java.format.settings.url": "",
+    "editor.formatOnSave": true,
+    "files.exclude": {
+        "**/.gradle": true,
+        "**/build": true
+    }
+}
