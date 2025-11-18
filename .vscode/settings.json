@@ -8,5 +8,7 @@
     "files.exclude": {
         "**/.gradle": true,
         "**/build": true
-    }
+    },
+    "java.compile.nullAnalysis.mode": "automatic",
+    "java.configuration.updateBuildConfiguration": "interactive"
 }

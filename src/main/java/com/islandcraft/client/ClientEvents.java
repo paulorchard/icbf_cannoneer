@@ -99,6 +99,27 @@ public class ClientEvents {
         if (player == null)
             return;
 
+        // Enforce first-person-only sending for explosion requests.
+        try {
+            CameraType camType = mc.options.getCameraType();
+            if (camType != CameraType.FIRST_PERSON) {
+                return;
+            }
+        } catch (Throwable ignored) {
+        }
+
+        // Only allow click-triggered explosions when the active camera is
+        // first-person. This prevents third-person camera mods or detached
+        // cameras from allowing remote explosion requests via clicks.
+        try {
+            CameraType camType = mc.options.getCameraType();
+            if (camType != CameraType.FIRST_PERSON) {
+                IslandCraftMod.LOGGER.debug("Click ignored: cameraType={} (only FIRST_PERSON allowed)", camType);
+                return;
+            }
+        } catch (Throwable ignored) {
+        }
+
         // Respect client config: if camera is in third-person and user disabled
         // overlay, skip tracing
         try {
@@ -356,7 +377,8 @@ public class ClientEvents {
                 Vec3 end = eye.add(look.scale(MAX_RANGE));
                 HitResult raw = null;
                 try {
-                    raw = mc.level.clip(new ClipContext(eye, end, ClipContext.Block.OUTLINE, ClipContext.Fluid.ANY, player));
+                    raw = mc.level
+                            .clip(new ClipContext(eye, end, ClipContext.Block.OUTLINE, ClipContext.Fluid.ANY, player));
                 } catch (Throwable t) {
                     raw = mc.hitResult;
                 }
@@ -405,20 +427,10 @@ public class ClientEvents {
             float strength = 4.0f; // TNT-like default; adjust as desired
             boolean fire = false;
             int modeOrd = 0; // unused for TNT fallback
-            IslandCraftMod.LOGGER.info("Requesting explosion at {} strength={}", pos, strength);
             if (NetworkHandler.CHANNEL != null) {
                 NetworkHandler.CHANNEL.sendToServer(new ExplosionPacket(pos, strength, fire, modeOrd));
             } else {
                 IslandCraftMod.LOGGER.warn("Network channel not available; fallback to client-side chat only");
-            }
-            // Provide immediate client feedback as well
-            try {
-                player.displayClientMessage(Component.literal(msg), false);
-            } catch (Throwable t) {
-                try {
-                    mc.gui.getChat().addMessage(Component.literal(msg));
-                } catch (Throwable ignored) {
-                }
             }
         } catch (Throwable t) {
             IslandCraftMod.LOGGER.warn("Failed to request explosion: {}", t.toString());
