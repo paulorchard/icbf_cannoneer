@@ -10,6 +10,7 @@ import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import org.slf4j.Logger;
 import com.islandcraft.client.ClientConfig;
 import com.islandcraft.network.NetworkHandler;
+import com.islandcraft.init.ModCreativeTabs;
 
 @Mod(IslandCraftMod.MODID)
 public class IslandCraftMod {
@@ -26,6 +27,12 @@ public class IslandCraftMod {
             NetworkHandler.register();
         } catch (Throwable t) {
             LOGGER.warn("Failed to register network handler: {}", t.toString());
+        }
+        // Register creative tabs and other registry-backed objects
+        try {
+            ModCreativeTabs.register(bus);
+        } catch (Throwable t) {
+            LOGGER.warn("Failed to register creative tabs: {}", t.toString());
         }
     }
 }
