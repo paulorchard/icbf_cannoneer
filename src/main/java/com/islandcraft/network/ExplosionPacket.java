@@ -59,7 +59,7 @@ public class ExplosionPacket {
                 if (sender.getServer() != null) {
                     // Summon at one block above the target so the TNT falls down and
                     // detonates at/above the surface (avoids spawning beneath water).
-                    String cmd = String.format("summon tnt %d %d %d {Fuse:0}", pkt.pos.getX(), pkt.pos.getY() + 1,
+                        String cmd = String.format("summon tnt %d %d %d {Fuse:0}", pkt.pos.getX(), pkt.pos.getY() + 2,
                             pkt.pos.getZ());
                     IslandCraftMod.LOGGER.info("Attempting to dispatch server command: {}", cmd);
                     try {
@@ -132,36 +132,140 @@ public class ExplosionPacket {
                                             if (!dispInvoked) {
                                                 IslandCraftMod.LOGGER.warn(
                                                         "No suitable dispatcher.dispatch method found (inspected methods)");
-                                                // As a robust fallback across mappings, try spawning a PrimedTnt entity
-                                                try {
-                                                    net.minecraft.commands.CommandSourceStack css = sender
-                                                            .createCommandSourceStack();
-                                                    ServerLevel slevel = css.getLevel();
-                                                    if (slevel != null) {
-                                                        double dx = pkt.pos.getX() + 0.5D;
-                                                        // spawn the primed TNT one block above the target so it
-                                                        // drops and explodes at the surface rather than below it
-                                                        double dy = pkt.pos.getY() + 1.5D;
-                                                        double dz = pkt.pos.getZ() + 0.5D;
-                                                        PrimedTnt tnt = new PrimedTnt(slevel, dx, dy, dz, sender);
-                                                        try {
-                                                            tnt.setFuse(0);
-                                                        } catch (Throwable __f) {
-                                                            // some mappings may use a different setter name — ignore if
-                                                            // absent
-                                                        }
-                                                        slevel.addFreshEntity(tnt);
-                                                        spawnedFallback = true;
-                                                        IslandCraftMod.LOGGER.info(
-                                                                "Spawned PrimedTnt entity at {} via fallback", pkt.pos);
-                                                    } else {
-                                                        IslandCraftMod.LOGGER.warn(
-                                                                "Cannot spawn PrimedTnt: server level not available");
-                                                    }
-                                                } catch (Throwable spEx) {
-                                                    IslandCraftMod.LOGGER.warn("Failed to spawn PrimedTnt fallback: {}",
-                                                            spEx.toString());
-                                                }
+                                                                // Prefer calling the server Explosion API directly with a scaled
+                                                                // strength so we can control damage via ExplosionConfig. If that
+                                                                // call fails for any reason, fall back to spawning TNT via the
+                                                                // original approach below.
+                                                                try {
+                                                                    net.minecraft.commands.CommandSourceStack css = sender
+                                                                            .createCommandSourceStack();
+                                                                    ServerLevel slevel = css.getLevel();
+                                                                        if (slevel != null) {
+                                                                        double dx = pkt.pos.getX() + 0.5D;
+                                                                        // explode above the block center so surface hits and avoid water immunity
+                                                                        double dy = pkt.pos.getY() + 2.0D;
+                                                                        double dz = pkt.pos.getZ() + 0.5D;
+                                                                        float scaled = com.islandcraft.config.ExplosionConfig.scaledStrength(pkt.strength);
+                                                                        try {
+                                                                            boolean exploded = false;
+                                                                            // Try to find and invoke an appropriate explode(...) method reflectively
+                                                                            for (java.lang.reflect.Method m : slevel.getClass().getMethods()) {
+                                                                                if (!m.getName().equals("explode"))
+                                                                                    continue;
+                                                                                Class<?>[] pts = m.getParameterTypes();
+                                                                                if (pts.length != 6 && pts.length != 7)
+                                                                                    continue;
+                                                                                Object[] args = new Object[pts.length];
+                                                                                // arg0 -> Entity / exploder
+                                                                                try {
+                                                                                    if (pts[0].isAssignableFrom(sender.getClass())) {
+                                                                                        args[0] = sender;
+                                                                                    } else if (pts[0].isAssignableFrom(net.minecraft.world.entity.Entity.class)) {
+                                                                                        args[0] = sender;
+                                                                                    } else {
+                                                                                        continue;
+                                                                                    }
+                                                                                } catch (Throwable __assign) {
+                                                                                    continue;
+                                                                                }
+                                                                                args[1] = dx;
+                                                                                args[2] = dy;
+                                                                                args[3] = dz;
+                                                                                // try to satisfy the 'power' parameter
+                                                                                if (pts[4] == float.class || pts[4] == Float.class) {
+                                                                                    args[4] = scaled;
+                                                                                } else if (pts[4] == double.class || pts[4] == Double.class) {
+                                                                                    args[4] = (double) scaled;
+                                                                                } else {
+                                                                                    continue;
+                                                                                }
+                                                                                // handle optional boolean+enum or single enum last parameter
+                                                                                try {
+                                                                                    if (pts.length == 6) {
+                                                                                        Class<?> last = pts[5];
+                                                                                        if (last.isEnum()) {
+                                                                                            Object enumConst = null;
+                                                                                            for (String cand : new String[] {"DESTROY", "BREAK", "BLOCK", "NONE"}) {
+                                                                                                try {
+                                                                                                    enumConst = java.lang.Enum.valueOf((Class) last, cand);
+                                                                                                    break;
+                                                                                                } catch (Throwable __e) {
+                                                                                                }
+                                                                                            }
+                                                                                            if (enumConst == null) {
+                                                                                                Object[] consts = last.getEnumConstants();
+                                                                                                if (consts != null && consts.length > 0)
+                                                                                                    enumConst = consts[0];
+                                                                                            }
+                                                                                            args[5] = enumConst;
+                                                                                        } else if (last == boolean.class) {
+                                                                                            args[5] = pkt.fire;
+                                                                                        } else {
+                                                                                            continue;
+                                                                                        }
+                                                                                    } else if (pts.length == 7) {
+                                                                                        // try boolean then enum
+                                                                                        if (pts[5] == boolean.class) {
+                                                                                            args[5] = pkt.fire;
+                                                                                        } else {
+                                                                                            continue;
+                                                                                        }
+                                                                                        Class<?> last = pts[6];
+                                                                                        Object enumConst = null;
+                                                                                        if (last.isEnum()) {
+                                                                                            for (String cand : new String[] {"DESTROY", "BREAK", "BLOCK", "NONE"}) {
+                                                                                                try {
+                                                                                                    enumConst = java.lang.Enum.valueOf((Class) last, cand);
+                                                                                                    break;
+                                                                                                } catch (Throwable __e) {
+                                                                                                }
+                                                                                            }
+                                                                                            if (enumConst == null) {
+                                                                                                Object[] consts = last.getEnumConstants();
+                                                                                                if (consts != null && consts.length > 0)
+                                                                                                    enumConst = consts[0];
+                                                                                            }
+                                                                                        }
+                                                                                        args[6] = enumConst;
+                                                                                    }
+                                                                                } catch (Throwable __prep) {
+                                                                                    continue;
+                                                                                }
+                                                                                try {
+                                                                                    m.invoke(slevel, args);
+                                                                                    exploded = true;
+                                                                                    spawnedFallback = true;
+                                                                                    IslandCraftMod.LOGGER.info("Invoked ServerLevel.explode via reflection (matched {})", m);
+                                                                                    break;
+                                                                                } catch (Throwable iex) {
+                                                                                    IslandCraftMod.LOGGER.warn("explode reflection invocation threw: {}", iex.toString());
+                                                                                }
+                                                                            }
+                                                                            if (!exploded) {
+                                                                                throw new RuntimeException("No suitable explode method invoked");
+                                                                            }
+                                                                        } catch (Throwable exExpl) {
+                                                                            IslandCraftMod.LOGGER.warn("Server explode call failed: {}", exExpl.toString());
+                                                                            // fallback to creating a PrimedTnt entity as before
+                                                                            try {
+                                                                                PrimedTnt tnt = new PrimedTnt(slevel, dx, pkt.pos.getY() + 2.0D, dz, sender);
+                                                                                try {
+                                                                                    tnt.setFuse(0);
+                                                                                } catch (Throwable __f) {
+                                                                                }
+                                                                                slevel.addFreshEntity(tnt);
+                                                                                spawnedFallback = true;
+                                                                                IslandCraftMod.LOGGER.info("Spawned PrimedTnt entity at {} via fallback", pkt.pos);
+                                                                            } catch (Throwable spEx) {
+                                                                                IslandCraftMod.LOGGER.warn("Failed to spawn PrimedTnt fallback: {}", spEx.toString());
+                                                                            }
+                                                                        }
+                                                                    } else {
+                                                                        IslandCraftMod.LOGGER.warn("Cannot spawn/explode: server level not available");
+                                                                    }
+                                                                } catch (Throwable spEx) {
+                                                                    IslandCraftMod.LOGGER.warn("Failed to spawn/explode fallback: {}", spEx.toString());
+                                                                }
                                             }
                                         } else {
                                             IslandCraftMod.LOGGER.warn("Command dispatcher was null");
@@ -200,7 +304,7 @@ public class ExplosionPacket {
                         ServerLevel slevel = css2.getLevel();
                         if (slevel != null) {
                             double dx = pkt.pos.getX() + 0.5D;
-                            double dy = pkt.pos.getY() + 1.5D;
+                            double dy = pkt.pos.getY() + 2.0D;
                             double dz = pkt.pos.getZ() + 0.5D;
                             PrimedTnt tnt = new PrimedTnt(slevel, dx, dy, dz, sender);
                             try {
@@ -215,6 +319,16 @@ public class ExplosionPacket {
                     }
                 }
             } catch (Throwable __ignored) {
+            }
+            // Notify the firing player with a client-side visual cue (sound + particles)
+            try {
+                if (sender != null && NetworkHandler.CHANNEL != null) {
+                    NetworkHandler.CHANNEL.send(
+                            net.minecraftforge.network.PacketDistributor.PLAYER.with(() -> sender),
+                            new ExplosionNotifyPacket(pkt.pos, pkt.strength, pkt.fire));
+                }
+            } catch (Throwable __notify) {
+                IslandCraftMod.LOGGER.warn("Failed to send ExplosionNotifyPacket: {}", __notify.toString());
             }
         });
         ctx.setPacketHandled(true);

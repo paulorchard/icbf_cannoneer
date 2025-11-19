@@ -14,7 +14,9 @@ public class NetworkHandler {
         CHANNEL = NetworkRegistry.newSimpleChannel(name, () -> PROTOCOL, PROTOCOL::equals, PROTOCOL::equals);
         int id = 0;
         CHANNEL.registerMessage(id++, ExplosionPacket.class, ExplosionPacket::encode, ExplosionPacket::decode,
-                ExplosionPacket::handle);
+            ExplosionPacket::handle);
+        CHANNEL.registerMessage(id++, ExplosionNotifyPacket.class, ExplosionNotifyPacket::encode,
+            ExplosionNotifyPacket::decode, ExplosionNotifyPacket::handle);
         IslandCraftMod.LOGGER.info("Network channel registered");
     }
 }
