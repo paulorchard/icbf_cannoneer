@@ -11,6 +11,7 @@ import org.slf4j.Logger;
 import com.islandcraft.client.ClientConfig;
 import com.islandcraft.network.NetworkHandler;
 import com.islandcraft.init.ModCreativeTabs;
+import com.islandcraft.init.ModItems;
 
 @Mod(IslandCraftMod.MODID)
 public class IslandCraftMod {
@@ -34,5 +35,27 @@ public class IslandCraftMod {
         } catch (Throwable t) {
             LOGGER.warn("Failed to register creative tabs: {}", t.toString());
         }
+        try {
+            ModItems.register(bus);
+        } catch (Throwable t) {
+            LOGGER.warn("Failed to register items: {}", t.toString());
+        }
+        try {
+            com.islandcraft.init.ModBlocks.register(bus);
+        } catch (Throwable t) {
+            LOGGER.warn("Failed to register blocks: {}", t.toString());
+        }
+
+        try {
+            MinecraftForge.EVENT_BUS.register(new com.islandcraft.init.CannonBreakHandler());
+        } catch (Throwable t) {
+            LOGGER.warn("Failed to register CannonBreakHandler: {}", t.toString());
+        }
+        try {
+            MinecraftForge.EVENT_BUS.register(new com.islandcraft.init.ModServerEvents());
+        } catch (Throwable t) {
+            LOGGER.warn("Failed to register server events: {}", t.toString());
+        }
+        // SavedData-backed persistence will be loaded on server start events.
     }
 }

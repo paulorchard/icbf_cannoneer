@@ -1,0 +1,426 @@
+{
+    "ambientocclusion": true,
+    "textures": {
+        "iron": "minecraft:block/iron_block",
+        "dark_oak": "minecraft:block/dark_oak_planks",
+        "oak": "minecraft:block/oak_planks",
+        "observer_top": "minecraft:block/observer_top",
+        "dispenser_front": "minecraft:block/dispenser_front"
+    },
+    "elements": [
+        {
+            "name": "base_stairs_rear",
+            "from": [
+                2,
+                0,
+                0
+            ],
+            "to": [
+                14,
+                6,
+                4
+            ],
+            "faces": {
+                "north": {
+                    "uv": [
+                        2,
+                        0,
+                        14,
+                        6
+                    ],
+                    "texture": "#dark_oak"
+                },
+                "east": {
+                    "uv": [
+                        0,
+                        0,
+                        4,
+                        6
+                    ],
+                    "texture": "#dark_oak"
+                },
+                "south": {
+                    "uv": [
+                        2,
+                        0,
+                        14,
+                        6
+                    ],
+                    "texture": "#dark_oak"
+                },
+                "west": {
+                    "uv": [
+                        0,
+                        0,
+                        4,
+                        6
+                    ],
+                    "texture": "#dark_oak"
+                },
+                "up": {
+                    "uv": [
+                        2,
+                        0,
+                        14,
+                        4
+                    ],
+                    "texture": "#dark_oak"
+                },
+                "down": {
+                    "uv": [
+                        2,
+                        0,
+                        14,
+                        4
+                    ],
+                    "texture": "#dark_oak"
+                }
+            }
+        },
+        {
+            "name": "base_planks_mid",
+            "from": [
+                2,
+                0,
+                4
+            ],
+            "to": [
+                14,
+                6,
+                8
+            ],
+            "faces": {
+                "north": {
+                    "uv": [
+                        2,
+                        0,
+                        14,
+                        6
+                    ],
+                    "texture": "#dark_oak"
+                },
+                "east": {
+                    "uv": [
+                        0,
+                        0,
+                        4,
+                        6
+                    ],
+                    "texture": "#dark_oak"
+                },
+                "south": {
+                    "uv": [
+                        2,
+                        0,
+                        14,
+                        6
+                    ],
+                    "texture": "#dark_oak"
+                },
+                "west": {
+                    "uv": [
+                        0,
+                        0,
+                        4,
+                        6
+                    ],
+                    "texture": "#dark_oak"
+                },
+                "up": {
+                    "uv": [
+                        2,
+                        0,
+                        14,
+                        4
+                    ],
+                    "texture": "#dark_oak"
+                },
+                "down": {
+                    "uv": [
+                        2,
+                        0,
+                        14,
+                        4
+                    ],
+                    "texture": "#dark_oak"
+                }
+            }
+        },
+        {
+            "name": "front_stairs_upside_down",
+            "from": [
+                2,
+                6,
+                8
+            ],
+            "to": [
+                14,
+                10,
+                12
+            ],
+            "faces": {
+                "north": {
+                    "uv": [
+                        2,
+                        0,
+                        14,
+                        4
+                    ],
+                    "texture": "#oak"
+                },
+                "east": {
+                    "uv": [
+                        0,
+                        0,
+                        4,
+                        4
+                    ],
+                    "texture": "#oak"
+                },
+                "south": {
+                    "uv": [
+                        2,
+                        0,
+                        14,
+                        4
+                    ],
+                    "texture": "#oak"
+                },
+                "west": {
+                    "uv": [
+                        0,
+                        0,
+                        4,
+                        4
+                    ],
+                    "texture": "#oak"
+                },
+                "up": {
+                    "uv": [
+                        2,
+                        0,
+                        14,
+                        4
+                    ],
+                    "texture": "#oak"
+                },
+                "down": {
+                    "uv": [
+                        2,
+                        0,
+                        14,
+                        4
+                    ],
+                    "texture": "#oak"
+                }
+            }
+        },
+        {
+            "name": "iron_top_1",
+            "from": [
+                3,
+                10,
+                4
+            ],
+            "to": [
+                13,
+                16,
+                8
+            ],
+            "faces": {
+                "north": {
+                    "uv": [
+                        3,
+                        10,
+                        13,
+                        16
+                    ],
+                    "texture": "#iron"
+                },
+                "east": {
+                    "uv": [
+                        3,
+                        10,
+                        13,
+                        16
+                    ],
+                    "texture": "#iron"
+                },
+                "south": {
+                    "uv": [
+                        3,
+                        10,
+                        13,
+                        16
+                    ],
+                    "texture": "#observer_top"
+                },
+                "west": {
+                    "uv": [
+                        3,
+                        10,
+                        13,
+                        16
+                    ],
+                    "texture": "#iron"
+                },
+                "up": {
+                    "uv": [
+                        3,
+                        10,
+                        13,
+                        16
+                    ],
+                    "texture": "#iron"
+                },
+                "down": {
+                    "uv": [
+                        3,
+                        10,
+                        13,
+                        16
+                    ],
+                    "texture": "#iron"
+                }
+            }
+        },
+        {
+            "name": "iron_top_2",
+            "from": [
+                3,
+                10,
+                8
+            ],
+            "to": [
+                13,
+                16,
+                12
+            ],
+            "faces": {
+                "north": {
+                    "uv": [
+                        3,
+                        10,
+                        13,
+                        16
+                    ],
+                    "texture": "#iron"
+                },
+                "east": {
+                    "uv": [
+                        3,
+                        10,
+                        13,
+                        16
+                    ],
+                    "texture": "#iron"
+                },
+                "south": {
+                    "uv": [
+                        3,
+                        10,
+                        13,
+                        16
+                    ],
+                    "texture": "#iron"
+                },
+                "west": {
+                    "uv": [
+                        3,
+                        10,
+                        13,
+                        16
+                    ],
+                    "texture": "#iron"
+                },
+                "up": {
+                    "uv": [
+                        3,
+                        10,
+                        13,
+                        16
+                    ],
+                    "texture": "#iron"
+                },
+                "down": {
+                    "uv": [
+                        3,
+                        10,
+                        13,
+                        16
+                    ],
+                    "texture": "#iron"
+                }
+            }
+        },
+        {
+            "name": "iron_top_3",
+            "from": [
+                3,
+                10,
+                12
+            ],
+            "to": [
+                13,
+                16,
+                16
+            ],
+            "faces": {
+                "north": {
+                    "uv": [
+                        3,
+                        10,
+                        13,
+                        16
+                    ],
+                    "texture": "#dispenser_front"
+                },
+                "east": {
+                    "uv": [
+                        3,
+                        10,
+                        13,
+                        16
+                    ],
+                    "texture": "#iron"
+                },
+                "south": {
+                    "uv": [
+                        3,
+                        10,
+                        13,
+                        16
+                    ],
+                    "texture": "#iron"
+                },
+                "west": {
+                    "uv": [
+                        3,
+                        10,
+                        13,
+                        16
+                    ],
+                    "texture": "#iron"
+                },
+                "up": {
+                    "uv": [
+                        3,
+                        10,
+                        13,
+                        16
+                    ],
+                    "texture": "#iron"
+                },
+                "down": {
+                    "uv": [
+                        3,
+                        10,
+                        13,
+                        16
+                    ],
+                    "texture": "#iron"
+                }
+            }
+        }
+    ]
+}

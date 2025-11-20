@@ -1,0 +1,20 @@
+{
+    "variants": {
+        "facing=north": {
+            "model": "icbf_cannoneer:block/icbf_cannon_single",
+            "y": 0
+        },
+        "facing=east": {
+            "model": "icbf_cannoneer:block/icbf_cannon_single",
+            "y": 90
+        },
+        "facing=south": {
+            "model": "icbf_cannoneer:block/icbf_cannon_single",
+            "y": 180
+        },
+        "facing=west": {
+            "model": "icbf_cannoneer:block/icbf_cannon_single",
+            "y": 270
+        }
+    }
+}
